@@ -6,6 +6,7 @@ import type {
   Category,
   DiscoveryCandidateItem,
   DiscoveryResult,
+  GlobalSettingsResponse,
   MonitoringData,
   MonitoringWindow,
   ProbeStatus,
@@ -13,6 +14,7 @@ import type {
   RouteTemplateItem,
   RouteTemplateUiHints,
   TemplatesListResponse,
+  UpdateGlobalSettingsInput,
 } from './types';
 
 export class ApiClientError extends Error {
@@ -43,6 +45,7 @@ const CODE_LABELS: Record<string, string> = {
   ROUTE_NOT_FOUND: '未找到目标模型路由记录',
   REVISION_NOT_FOUND: '未找到目标历史版本记录',
   REVISION_NOT_RESTORABLE: '删除类型的历史记录无路由快照，请选择上一条有效版本进行恢复',
+  SETTINGS_CONFLICT: '全局配置已被其他操作更新，请刷新最新配置后再保存',
   ORIGIN_DENIED: '当前前端访问域名不在后端允许 Origin 列表内（检查 MIO_ADMIN_ALLOWED_ORIGINS）',
 };
 
@@ -279,4 +282,12 @@ export const adminApi = {
 
   getMonitoring: (window: MonitoringWindow = '7d') =>
     request<MonitoringData>(`/monitoring?window=${window}`),
+
+  getGlobalSettings: () => request<GlobalSettingsResponse>('/settings/global'),
+
+  updateGlobalSettings: (payload: UpdateGlobalSettingsInput) =>
+    request<GlobalSettingsResponse>('/settings/global', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
 };

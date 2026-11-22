@@ -1,7 +1,17 @@
-import { Activity, Blocks, History, Layers, LogOut, ShieldCheck, UserCog } from 'lucide-react';
+import {
+  Activity,
+  Blocks,
+  History,
+  Layers,
+  LogOut,
+  ShieldCheck,
+  SlidersHorizontal,
+  UserCog,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { adminApi } from './api';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
+import { GlobalSettingsPage } from './components/GlobalSettingsPage';
 import { LoginPage } from './components/LoginPage';
 import { ModelCatalogPage } from './components/ModelCatalogPage';
 import { MonitoringPage } from './components/MonitoringPage';
@@ -9,7 +19,7 @@ import { RevisionsPage } from './components/RevisionsPage';
 import { TemplatesPage } from './components/TemplatesPage';
 import type { AdminAccount } from './types';
 
-type NavKey = 'catalog' | 'templates' | 'monitoring' | 'revisions' | 'account';
+type NavKey = 'catalog' | 'templates' | 'monitoring' | 'revisions' | 'settings' | 'account';
 
 const NAV_ITEMS: { key: NavKey; label: string; subtitle: string; icon: typeof Layers }[] = [
   {
@@ -35,6 +45,12 @@ const NAV_ITEMS: { key: NavKey; label: string; subtitle: string; icon: typeof La
     label: '变更记录与回滚',
     subtitle: '路由版本差异对比与全链路操作审计',
     icon: History,
+  },
+  {
+    key: 'settings',
+    label: '全局配置',
+    subtitle: '邮箱登录开关与手机验证码策略',
+    icon: SlidersHorizontal,
   },
   {
     key: 'account',
@@ -154,6 +170,7 @@ export default function App() {
           {activeNav === 'templates' && <TemplatesPage />}
           {activeNav === 'monitoring' && <MonitoringPage />}
           {activeNav === 'revisions' && <RevisionsPage />}
+          {activeNav === 'settings' && <GlobalSettingsPage />}
           {activeNav === 'account' && (
             <AccountSettingsPage admin={admin} onAdminUpdated={(next) => setAdmin(next)} />
           )}

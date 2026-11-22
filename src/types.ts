@@ -354,3 +354,33 @@ export interface AdminAuditLog {
   afterState: Record<string, unknown> | null;
   createdAt: string;
 }
+
+export type AuthSmsMode = 'live' | 'bypass' | 'disabled';
+
+export interface GlobalAuthSettings {
+  emailPasswordEnabled: boolean;
+  smsMode: AuthSmsMode;
+  smsBypassCode: string | null;
+}
+
+export interface GlobalSettingsData {
+  auth: GlobalAuthSettings;
+  revision: number;
+  updatedBy: string | null;
+  updatedAt: string | null;
+}
+
+export interface GlobalSettingsRuntimeInfo {
+  envEmailPasswordDefault: boolean;
+  smsProviderConfigured: boolean;
+}
+
+export interface GlobalSettingsResponse {
+  settings: GlobalSettingsData;
+  runtime: GlobalSettingsRuntimeInfo;
+}
+
+export interface UpdateGlobalSettingsInput {
+  expectedRevision: number;
+  auth: GlobalAuthSettings;
+}

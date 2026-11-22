@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError, adminApi } from '../src/api';
+import type { GlobalSettingsResponse, UpdateGlobalSettingsInput } from '../src/types';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -159,5 +160,102 @@ describe('adminApi', () => {
     expect(fetchMock.mock.calls[3]?.[0]).toBe(
       '/api/v1/admin/revisions?limit=20&rawModelId=vendor%2Fmodel-x',
     );
+  });
+
+  it('calls GET and PATCH /api/v1/admin/settings/global with typed payloads', async () => {
+    const initialResponse: GlobalSettingsResponse = {
+      settings: {
+        auth: {
+          emailPasswordEnabled: true,
+          smsMode: 'live',
+          smsBypassCode: null,
+        },
+        revision: 0,
+        updatedBy: null,
+        updatedAt: null,
+      },
+      runtime: {
+        envEmailPasswordDefault: true,
+        smsProviderConfigured: true,
+      },
+    };
+    const updatePayload: UpdateGlobalSettingsInput = {
+      expectedRevision: 0,
+      auth: {
+        emailPasswordEnabled: false,
+        smsMode: 'bypass',
+        smsBypassCode: '888888',
+      },
+    };
+    const updatedResponse: GlobalSettingsResponse = {
+      settings: {
+        auth: updatePayload.auth,
+        revision: 1,
+        updatedBy: 'miioo_admin',
+        updatedAt: '2026-04-01T12:00:00.000Z',
+      },
+      runtime: {
+        envEmailPasswordDefault: true,
+        smsProviderConfigured: true,
+      },
+    };
+
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(initialResponse))
+      .mockResolvedValueOnce(jsonResponse(updatedResponse));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const fetched = await adminApi.getGlobalSettings();
+    expect(fetched).toEqual(initialResponse);
+
+    const [getUrl, getInit] = fetchMock.mock.calls[0]!;
+    expect(getUrl).toBe('/api/v1/admin/settings/global');
+    expect(getInit?.method).toBeUndefined();
+    expect(getInit?.credentials).toBe('include');
+    expect(new Headers(getInit?.headers).has('Content-Type')).toBe(false);
+
+    const updated = await adminApi.updateGlobalSettings(updatePayload);
+    expect(updated).toEqual(updatedResponse);
+
+    const [patchUrl, patchInit] = fetchMock.mock.calls[1]!;
+    expect(patchUrl).toBe('/api/v1/admin/settings/global');
+    expect(patchInit?.method).toBe('PATCH');
+    expect(patchInit?.credentials).toBe('include');
+    expect(new Headers(patchInit?.headers).get('Content-Type')).toBe('application/json');
+    expect(patchInit?.body).toBe(JSON.stringify(updatePayload));
+  });
+
+  it('maps 409 SETTINGS_CONFLICT to localized ApiClientError', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse(
+        {
+          error: {
+            code: 'SETTINGS_CONFLICT',
+            message: 'Settings revision conflict',
+          },
+        },
+        409,
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const err = await adminApi
+      .updateGlobalSettings({
+        expectedRevision: 2,
+        auth: {
+          emailPasswordEnabled: true,
+          smsMode: 'disabled',
+          smsBypassCode: null,
+        },
+      })
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ApiClientError);
+    expect(err).toMatchObject({
+      status: 409,
+      code: 'SETTINGS_CONFLICT',
+      message: '全局配置已被其他操作更新，请刷新最新配置后再保存',
+    });
   });
 });
