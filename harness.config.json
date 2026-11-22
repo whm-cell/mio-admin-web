@@ -1,0 +1,48 @@
+{
+  "ignoredDirectories": [
+    "node_modules",
+    "dist",
+    "coverage",
+    ".git",
+    ".work",
+    ".runtime",
+    ".claude"
+  ],
+  "ignoredFiles": [".DS_Store", ".env"],
+  "ignoredFilePrefixes": [".env."],
+  "ignoredFileExceptions": [".env.example"],
+  "ignoredExtensions": [".tsbuildinfo", ".local"],
+  "allowedRoots": [
+    { "dir": "src", "extensions": [".ts", ".tsx", ".css"] },
+    { "dir": "tests", "extensions": [".ts"] },
+    { "dir": "scripts", "extensions": [".ts"] }
+  ],
+  "allowedRootFiles": [
+    ".gitignore",
+    ".prettierignore",
+    ".prettierrc.json",
+    "AGENTS.md",
+    "README.md",
+    "eslint.config.mjs",
+    "harness.config.json",
+    "index.html",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "tsconfig.check.json",
+    "tsconfig.json",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ],
+  "foundationFiles": ["src/types.ts", "src/api.ts", "src/savedCredentials.ts"],
+  "uiRoots": ["src/App.tsx", "src/components/"],
+  "capabilityAdapters": {
+    "fetch": ["src/api.ts"],
+    "storage": ["src/savedCredentials.ts"]
+  },
+  "forbiddenFileBasenamesInSrc": ["presets.ts", "presets.tsx"],
+  "shapeReview": {
+    "maxFileLines": 800,
+    "maxFunctionLines": 250
+  }
+}
