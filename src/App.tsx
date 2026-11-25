@@ -3,6 +3,7 @@ import {
   Blocks,
   Cpu,
   History,
+  KeyRound,
   Layers,
   LogOut,
   ShieldCheck,
@@ -17,12 +18,20 @@ import { GlobalSettingsPage } from './components/GlobalSettingsPage';
 import { LoginPage } from './components/LoginPage';
 import { ModelCatalogPage } from './components/ModelCatalogPage';
 import { MonitoringPage } from './components/MonitoringPage';
+import { OneLinkAuthSandboxPage } from './components/OneLinkAuthSandboxPage';
 import { RevisionsPage } from './components/RevisionsPage';
 import { TemplatesPage } from './components/TemplatesPage';
 import type { AdminAccount } from './types';
 
-type NavKey =
-  'catalog' | 'templates' | 'monitoring' | 'workers' | 'revisions' | 'settings' | 'account';
+export type NavKey =
+  | 'catalog'
+  | 'templates'
+  | 'monitoring'
+  | 'workers'
+  | 'revisions'
+  | 'settings'
+  | 'onelink-sandbox'
+  | 'account';
 
 const NAV_ITEMS: { key: NavKey; label: string; subtitle: string; icon: typeof Layers }[] = [
   {
@@ -58,8 +67,14 @@ const NAV_ITEMS: { key: NavKey; label: string; subtitle: string; icon: typeof La
   {
     key: 'settings',
     label: '全局配置',
-    subtitle: '邮箱登录开关与手机验证码策略',
+    subtitle: '邮箱登录、手机验证码与万联 SSO 配置',
     icon: SlidersHorizontal,
+  },
+  {
+    key: 'onelink-sandbox',
+    label: '万联登录验证沙箱',
+    subtitle: 'C 端四路径同浏览器联调验证',
+    icon: KeyRound,
   },
   {
     key: 'account',
@@ -69,10 +84,26 @@ const NAV_ITEMS: { key: NavKey; label: string; subtitle: string; icon: typeof La
   },
 ];
 
+const NAV_KEYS = new Set<string>(NAV_ITEMS.map((item) => item.key));
+
+export function resolveInitialNav(search: string): NavKey {
+  const params = new URLSearchParams(search);
+  const nav = params.get('nav');
+  if (nav && NAV_KEYS.has(nav)) {
+    return nav as NavKey;
+  }
+  if (params.has('onelink_result')) {
+    return 'onelink-sandbox';
+  }
+  return 'catalog';
+}
+
 export default function App() {
   const [admin, setAdmin] = useState<AdminAccount | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
-  const [activeNav, setActiveNav] = useState<NavKey>('catalog');
+  const [activeNav, setActiveNav] = useState<NavKey>(() =>
+    resolveInitialNav(window.location.search),
+  );
 
   useEffect(() => {
     adminApi
@@ -83,6 +114,18 @@ export default function App() {
       })
       .finally(() => setCheckingSession(false));
   }, []);
+
+  const handleSelectNav = (next: NavKey) => {
+    setActiveNav(next);
+    const url = new URL(window.location.href);
+    if (next === 'onelink-sandbox') {
+      url.searchParams.set('nav', 'onelink-sandbox');
+    } else {
+      url.searchParams.delete('nav');
+    }
+    url.searchParams.delete('onelink_result');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  };
 
   const handleLogout = async () => {
     await adminApi.logout().catch(() => {});
@@ -125,7 +168,7 @@ export default function App() {
                 <button
                   key={item.key}
                   type="button"
-                  onClick={() => setActiveNav(item.key)}
+                  onClick={() => handleSelectNav(item.key)}
                   className={`w-full text-left px-3 py-2.5 rounded-xl flex items-start gap-3 transition cursor-pointer ${
                     active
                       ? 'bg-indigo-50 text-indigo-900 border border-indigo-200/70'
@@ -171,20 +214,25 @@ export default function App() {
             <h1 className="text-lg font-semibold text-slate-900">{currentNav.label}</h1>
             <p className="text-xs text-slate-500 mt-0.5">{currentNav.subtitle}</p>
           </div>
-          <div className="text-xs text-slate-500 font-mono">API: /api/v1/admin</div>
+          <div className="text-xs text-slate-500 font-mono">
+            {activeNav === 'onelink-sandbox'
+              ? 'API: /api/v1/me & /api/auth/*'
+              : 'API: /api/v1/admin'}
+          </div>
         </header>
 
         <div className="p-6 max-w-[1440px] w-full mx-auto">
           {activeNav === 'catalog' && <ModelCatalogPage />}
           {activeNav === 'templates' && <TemplatesPage />}
           {activeNav === 'monitoring' && (
-            <MonitoringPage onOpenComputeWorkers={() => setActiveNav('workers')} />
+            <MonitoringPage onOpenComputeWorkers={() => handleSelectNav('workers')} />
           )}
           {activeNav === 'workers' && (
             <ComputeWorkersPage onSessionExpired={() => setAdmin(null)} />
           )}
           {activeNav === 'revisions' && <RevisionsPage />}
           {activeNav === 'settings' && <GlobalSettingsPage />}
+          {activeNav === 'onelink-sandbox' && <OneLinkAuthSandboxPage />}
           {activeNav === 'account' && (
             <AccountSettingsPage admin={admin} onAdminUpdated={(next) => setAdmin(next)} />
           )}

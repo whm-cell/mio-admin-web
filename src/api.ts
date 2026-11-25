@@ -3,7 +3,10 @@ import type {
   AdminAuditLog,
   AdminCatalogSummary,
   AdminModelItem,
+  AdminOneLinkSsoView,
   Category,
+  CompleteOneLinkPayload,
+  CompleteOneLinkResponse,
   ComputeExecutionDetailResponse,
   ComputeExecutionsListResponse,
   ComputeHistoryResponse,
@@ -17,14 +20,20 @@ import type {
   GlobalSettingsResponse,
   MonitoringData,
   MonitoringWindow,
+  OneLinkAuthIntent,
+  OneLinkPendingCandidate,
   ProbeStatus,
+  RegisterOneLinkSsoResponse,
   RouteRevisionRecord,
   RouteTemplateItem,
   RouteTemplateUiHints,
   TemplatesListResponse,
+  UpdateAdminOneLinkSsoInput,
   UpdateComputeWorkerLimitsInput,
   UpdateComputeWorkerLimitsResponse,
   UpdateGlobalSettingsInput,
+  UserAuthMe,
+  UserAuthProfile,
 } from './types';
 
 export class ApiClientError extends Error {
@@ -68,6 +77,28 @@ export const CODE_LABELS: Record<string, string> = {
   LIMITS_INVALID: 'Worker 拒绝了无效并发上限配置',
   QUERY_INVALID: '查询参数格式无效，请检查实例 ID、状态或任务 UUID',
   BODY_INVALID: '提交的调限参数格式不合法，请输入非负整数',
+  ONELINK_SSO_NOT_CONFIGURED: '服务端尚未完成万联单点登录环境变量配置',
+  ONELINK_REGISTER_IN_PROGRESS: '万联客户端注册正在进行中，请稍候完成后再试',
+  ONELINK_SSO_UNAVAILABLE: '万联单点登录服务当前未启用或暂不可用',
+  ONELINK_CLIENT_NAME_INVALID: '万联客户端名称不符合上游校验规则',
+  ONELINK_CLIENT_TEMPLATE_MISSING: '万联上游缺少对应的客户端注册模板配置',
+  ONELINK_REGISTER_UPSTREAM_FAILED: '调用万联客户端注册上游接口失败，请结合 traceId 排查',
+  ONELINK_UNAVAILABLE: '万联登录当前未开启或暂不可用',
+  ONELINK_ALREADY_BOUND: '该登录方式已绑定，暂不能完成本次操作',
+  ONELINK_PENDING_NOT_FOUND: '未找到待确认的万联授权会话，或会话已过期，请重新发起',
+  ONELINK_PENDING_INVALID: '待确认的万联授权凭证无效，请重新发起万联授权',
+  ONELINK_PENDING_ALREADY_COMPLETED: '该次万联授权已完成处理，请刷新当前状态',
+  EXISTING_PHONE_NOT_FOUND: '未找到该手机号对应的已有 Mio 账号，请更换手机号或选择创建新账号',
+  SESSION_REQUIRED:
+    '需要 10 分钟内的有效 C 端登录会话才能执行绑定，请重新登录后再重新发起「绑定当前 C 端账号」',
+  INVALID_OTP: '验证码错误或已过期，请重新核对或再次获取',
+  INVALID_INPUT: '请求参数格式不合法，请检查输入后重试',
+  AUTH_UNAVAILABLE: '认证服务当前暂不可用，请稍后重试',
+  ACCOUNT_DISABLED: '当前账号已被停用，无法继续登录或绑定',
+  PHONE_CONFLICT: '该登录方式已绑定，暂不能完成本次操作',
+  SMS_UNAVAILABLE: '短信验证码服务当前未配置或已关闭',
+  SMS_RATE_LIMITED: '验证码发送过于频繁，请稍后再试',
+  UNAUTHORIZED: '当前未登录或会话已失效，请先登录',
 };
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -406,4 +437,121 @@ export const adminApi = {
         body: JSON.stringify(payload),
       },
     ),
+
+  getOneLinkSso: () => request<AdminOneLinkSsoView>('/onelink/sso'),
+
+  updateOneLinkSso: (payload: UpdateAdminOneLinkSsoInput) =>
+    request<AdminOneLinkSsoView>('/onelink/sso', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  registerOneLinkSso: () =>
+    request<RegisterOneLinkSsoResponse>('/onelink/sso/register', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+};
+
+async function userRequest<T>(absoluteApiPath: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (init.body !== undefined && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  const response = await fetch(absoluteApiPath, {
+    ...init,
+    credentials: 'include',
+    headers,
+  });
+  if (!response.ok) {
+    let code = 'REQUEST_FAILED';
+    let message = `请求失败 (HTTP ${response.status})`;
+    try {
+      const data = (await response.json()) as {
+        error?: { code?: string; message?: string };
+        code?: string;
+        message?: string;
+      };
+      const rawCode = data?.error?.code ?? data?.code;
+      const rawMessage = data?.error?.message ?? data?.message;
+      if (typeof rawCode === 'string' && rawCode.trim() !== '') {
+        code = rawCode;
+        message =
+          CODE_LABELS[code] ??
+          (typeof rawMessage === 'string' && rawMessage.trim() !== '' ? rawMessage : message);
+      } else if (typeof rawMessage === 'string' && rawMessage.trim() !== '') {
+        message = rawMessage;
+      }
+    } catch {
+      // Ignore non-JSON error body
+    }
+    throw new ApiClientError(response.status, code, message);
+  }
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+  return JSON.parse(text) as T;
+}
+
+export const userAuthApi = {
+  me: () => userRequest<UserAuthMe>('/api/v1/me'),
+
+  profile: () => userRequest<UserAuthProfile>('/api/v1/me/profile'),
+
+  signOut: () =>
+    userRequest<unknown>('/api/auth/sign-out', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+
+  sendPhoneLoginOtp: (phoneNumber: string) =>
+    userRequest<{ status: boolean }>('/api/auth/phone-number/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumber }),
+    }),
+
+  verifyPhoneLogin: (phoneNumber: string, code: string) =>
+    userRequest<{ status: boolean }>('/api/auth/phone-number/verify', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumber, code }),
+    }),
+
+  sendPhoneBindingOtp: (phoneNumber: string) =>
+    userRequest<{ status: boolean }>('/api/auth/phone-binding/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumber }),
+    }),
+
+  confirmPhoneBinding: (phoneNumber: string, code: string) =>
+    userRequest<{ status: boolean }>('/api/auth/phone-binding/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumber, code }),
+    }),
+
+  startOneLink: (intent: OneLinkAuthIntent, returnPath: string) =>
+    userRequest<{ url: string }>('/api/auth/onelink/start', {
+      method: 'POST',
+      body: JSON.stringify({ intent, returnPath }),
+    }),
+
+  getOneLinkPending: () => userRequest<OneLinkPendingCandidate>('/api/auth/onelink/pending'),
+
+  cancelOneLinkPending: () =>
+    userRequest<{ ok: boolean }>('/api/auth/onelink/cancel', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+
+  sendOneLinkExistingOtp: (phoneNumber: string) =>
+    userRequest<{ status: boolean }>('/api/auth/onelink/existing/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumber }),
+    }),
+
+  completeOneLink: (payload: CompleteOneLinkPayload) =>
+    userRequest<CompleteOneLinkResponse>('/api/auth/onelink/complete', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };

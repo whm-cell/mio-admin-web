@@ -19,6 +19,7 @@ import type {
   GlobalSettingsResponse,
   GlobalSettingsRuntimeInfo,
 } from '../types';
+import { OneLinkSsoSettingsCard } from './OneLinkSsoSettingsCard';
 
 const SIX_DIGIT_CODE_RE = /^\d{6}$/;
 
@@ -590,19 +591,13 @@ export function GlobalSettingsPage() {
     }
   };
 
-  if (loading && !loaded) {
-    return (
-      <div className="max-w-3xl">
+  return (
+    <div className="max-w-3xl space-y-6">
+      {loading && !loaded ? (
         <div className="rounded-xl bg-white border border-slate-200 p-8 text-center text-xs text-slate-500">
           正在加载全局配置…
         </div>
-      </div>
-    );
-  }
-
-  if (!loaded) {
-    return (
-      <div className="max-w-3xl">
+      ) : !loaded ? (
         <div className="rounded-xl bg-rose-50 border border-rose-200 p-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs text-rose-700">
             <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -616,64 +611,64 @@ export function GlobalSettingsPage() {
             <RefreshCw className="h-3.5 w-3.5" /> 重新加载
           </button>
         </div>
-      </div>
-    );
-  }
+      ) : (
+        <form onSubmit={handleSave} className="space-y-6">
+          <StatusSummaryCard
+            settings={loaded.settings}
+            loading={loading}
+            saving={saving}
+            onRefresh={() => void loadSettings(true)}
+          />
 
-  return (
-    <form onSubmit={handleSave} className="max-w-3xl space-y-6">
-      <StatusSummaryCard
-        settings={loaded.settings}
-        loading={loading}
-        saving={saving}
-        onRefresh={() => void loadSettings(true)}
-      />
+          {loadError && (
+            <div className="rounded-lg px-3.5 py-2.5 text-xs bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>刷新配置失败：{loadError}</span>
+            </div>
+          )}
 
-      {loadError && (
-        <div className="rounded-lg px-3.5 py-2.5 text-xs bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>刷新配置失败：{loadError}</span>
-        </div>
+          <EmailPasswordCard
+            enabled={emailPasswordEnabled}
+            envDefault={loaded.runtime.envEmailPasswordDefault}
+            disabled={saving || loading}
+            onToggle={(next) => {
+              setEmailPasswordEnabled(next);
+              setNotice(null);
+            }}
+          />
+
+          <SmsPolicyCard
+            smsMode={smsMode}
+            smsBypassCode={smsBypassCode}
+            savedBypassCode={loaded.settings.auth.smsBypassCode}
+            runtime={loaded.runtime}
+            codeError={codeError}
+            disabled={saving || loading}
+            onModeChange={(nextMode) => {
+              setSmsMode(nextMode);
+              setNotice(null);
+            }}
+            onBypassCodeChange={(nextCode) => {
+              setSmsBypassCode(nextCode);
+              setNotice(null);
+            }}
+          />
+
+          <SettingsActionBar
+            isDirty={isDirty}
+            canSave={canSave}
+            loading={loading}
+            saving={saving}
+            conflictError={conflictError}
+            saveError={saveError}
+            notice={notice}
+            onReload={() => void loadSettings(true)}
+            onResetDraft={handleResetDraft}
+          />
+        </form>
       )}
 
-      <EmailPasswordCard
-        enabled={emailPasswordEnabled}
-        envDefault={loaded.runtime.envEmailPasswordDefault}
-        disabled={saving || loading}
-        onToggle={(next) => {
-          setEmailPasswordEnabled(next);
-          setNotice(null);
-        }}
-      />
-
-      <SmsPolicyCard
-        smsMode={smsMode}
-        smsBypassCode={smsBypassCode}
-        savedBypassCode={loaded.settings.auth.smsBypassCode}
-        runtime={loaded.runtime}
-        codeError={codeError}
-        disabled={saving || loading}
-        onModeChange={(nextMode) => {
-          setSmsMode(nextMode);
-          setNotice(null);
-        }}
-        onBypassCodeChange={(nextCode) => {
-          setSmsBypassCode(nextCode);
-          setNotice(null);
-        }}
-      />
-
-      <SettingsActionBar
-        isDirty={isDirty}
-        canSave={canSave}
-        loading={loading}
-        saving={saving}
-        conflictError={conflictError}
-        saveError={saveError}
-        notice={notice}
-        onReload={() => void loadSettings(true)}
-        onResetDraft={handleResetDraft}
-      />
-    </form>
+      <OneLinkSsoSettingsCard />
+    </div>
   );
 }
