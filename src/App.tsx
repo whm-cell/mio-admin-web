@@ -1,6 +1,7 @@
 import {
   Activity,
   Blocks,
+  Cpu,
   History,
   Layers,
   LogOut,
@@ -11,6 +12,7 @@ import {
 import { useEffect, useState } from 'react';
 import { adminApi } from './api';
 import { AccountSettingsPage } from './components/AccountSettingsPage';
+import { ComputeWorkersPage } from './components/ComputeWorkersPage';
 import { GlobalSettingsPage } from './components/GlobalSettingsPage';
 import { LoginPage } from './components/LoginPage';
 import { ModelCatalogPage } from './components/ModelCatalogPage';
@@ -19,7 +21,8 @@ import { RevisionsPage } from './components/RevisionsPage';
 import { TemplatesPage } from './components/TemplatesPage';
 import type { AdminAccount } from './types';
 
-type NavKey = 'catalog' | 'templates' | 'monitoring' | 'revisions' | 'settings' | 'account';
+type NavKey =
+  'catalog' | 'templates' | 'monitoring' | 'workers' | 'revisions' | 'settings' | 'account';
 
 const NAV_ITEMS: { key: NavKey; label: string; subtitle: string; icon: typeof Layers }[] = [
   {
@@ -39,6 +42,12 @@ const NAV_ITEMS: { key: NavKey; label: string; subtitle: string; icon: typeof La
     label: '运行与中间件监控',
     subtitle: '生图/对话 + RabbitMQ & Redis 完整档',
     icon: Activity,
+  },
+  {
+    key: 'workers',
+    label: '计算 Worker',
+    subtitle: 'Worker 实时并发槽位、占槽历史与动态调限',
+    icon: Cpu,
   },
   {
     key: 'revisions',
@@ -168,7 +177,12 @@ export default function App() {
         <div className="p-6 max-w-[1440px] w-full mx-auto">
           {activeNav === 'catalog' && <ModelCatalogPage />}
           {activeNav === 'templates' && <TemplatesPage />}
-          {activeNav === 'monitoring' && <MonitoringPage />}
+          {activeNav === 'monitoring' && (
+            <MonitoringPage onOpenComputeWorkers={() => setActiveNav('workers')} />
+          )}
+          {activeNav === 'workers' && (
+            <ComputeWorkersPage onSessionExpired={() => setAdmin(null)} />
+          )}
           {activeNav === 'revisions' && <RevisionsPage />}
           {activeNav === 'settings' && <GlobalSettingsPage />}
           {activeNav === 'account' && (

@@ -384,3 +384,242 @@ export interface UpdateGlobalSettingsInput {
   expectedRevision: number;
   auth: GlobalAuthSettings;
 }
+
+export type ComputeWorkerResourceClass = 'encode' | 'probe';
+
+export type ComputeWorkerMetricKey = 'total' | 'encode' | 'probe';
+
+export interface ComputeWorkerLimits {
+  total: number;
+  encode: number;
+  probe: number;
+}
+
+export type ComputeWorkerStatus = 'online' | 'stale' | 'offline' | 'unseen';
+
+export type ComputeWorkerExecutionProtocol = 'transcode.v1' | 'audio.inspect.v1' | 'media';
+
+export type ComputeWorkerExecutionState =
+  'queued' | 'active' | 'released' | 'cancelled' | 'unknown';
+
+export type ComputeWorkerExecutionPhase = 'downloading' | 'processing' | 'uploading' | 'finalizing';
+
+export type ComputeWorkerLimitChangeStatus = 'pending' | 'applied' | 'rejected';
+
+export type ComputeWorkerLimitRejectionReason =
+  'HARD_LIMIT_EXCEEDED' | 'INSTANCE_MISMATCH' | 'LIMITS_INVALID' | 'STALE_REVISION';
+
+export interface ComputeWorkerExecutionIdentity {
+  executionId: string;
+  protocol: ComputeWorkerExecutionProtocol;
+  jobId: string;
+  attemptId: string | null;
+  inspectionId: string | null;
+  resource: ComputeWorkerResourceClass;
+  slots: 1;
+}
+
+export interface ComputeWorkerActiveExecution extends ComputeWorkerExecutionIdentity {
+  acquiredAt: number;
+}
+
+export interface ComputeWorkerTelemetryGapPosition {
+  bootSequence: number;
+  sequence: number;
+  at: number;
+}
+
+export interface ComputeWorkerTelemetryGap {
+  first: ComputeWorkerTelemetryGapPosition;
+  last: ComputeWorkerTelemetryGapPosition;
+  count: number;
+}
+
+export interface ComputeWorkerSnapshot {
+  limits: {
+    hard: ComputeWorkerLimits;
+    applied: ComputeWorkerLimits;
+    revision: number;
+  };
+  usage: ComputeWorkerLimits;
+  waiting: ComputeWorkerLimits;
+  holds: {
+    encode: string[];
+    probe: string[];
+  };
+  active: ComputeWorkerActiveExecution[];
+}
+
+export interface ComputeWorkerDesiredLimits {
+  limits: ComputeWorkerLimits;
+  revision: number;
+  commandId: string | null;
+  status: ComputeWorkerLimitChangeStatus | null;
+  reason: ComputeWorkerLimitRejectionReason | null;
+  requestedAt: string | null;
+  confirmedAt: string | null;
+}
+
+export interface ComputeWorkerView {
+  instanceId: string;
+  status: ComputeWorkerStatus;
+  bootId: string | null;
+  observedAt: string | null;
+  receivedAt: string | null;
+  ageMs: number | null;
+  clockUncertain: boolean;
+  gap: ComputeWorkerTelemetryGap | null;
+  draining: boolean;
+  snapshot: ComputeWorkerSnapshot | null;
+  desired: ComputeWorkerDesiredLimits | null;
+}
+
+export interface ComputeSummaryResponse {
+  now: string;
+  instances: {
+    online: number;
+    stale: number;
+    offline: number;
+    unseen: number;
+  };
+  aggregate: {
+    usage: ComputeWorkerLimits;
+    applied: ComputeWorkerLimits;
+    hard: ComputeWorkerLimits;
+    waiting: ComputeWorkerLimits;
+    heldResources: number;
+  };
+  outbox: {
+    transcode: number;
+    media: number;
+    total: number;
+  };
+  broker: {
+    ready: number | null;
+    unacknowledged: number | null;
+  };
+  peaks: {
+    instanceId: string;
+    peak: number;
+  }[];
+}
+
+export interface ComputeWorkersListResponse {
+  workers: ComputeWorkerView[];
+  total: number;
+  offset: number;
+}
+
+export interface ComputeWorkerExecutionView {
+  executionId: string;
+  instanceId: string;
+  bootId: string;
+  protocol: string;
+  jobId: string;
+  attemptId: string | null;
+  inspectionId: string | null;
+  resource: ComputeWorkerResourceClass;
+  slots: number;
+  state: ComputeWorkerExecutionState;
+  uncertain: boolean;
+  queuedAt: string | null;
+  acquiredAt: string | null;
+  endedAt: string | null;
+  lastAt: string;
+  businessState: string | null;
+  businessStage: string | null;
+}
+
+export interface ComputeExecutionsListResponse {
+  executions: ComputeWorkerExecutionView[];
+}
+
+export type ComputeWorkerTelemetryEvent =
+  | {
+      kind: 'phase';
+      phase: ComputeWorkerExecutionPhase;
+      at: number;
+      execution: ComputeWorkerExecutionIdentity;
+    }
+  | {
+      kind: 'execution';
+      state: 'queued' | 'acquired' | 'released' | 'cancelled';
+      at: number;
+      execution: ComputeWorkerExecutionIdentity;
+    }
+  | {
+      kind: 'hold';
+      state: 'blocked' | 'unblocked';
+      at: number;
+      resource: ComputeWorkerResourceClass;
+      identity: string;
+    }
+  | {
+      kind: 'limits';
+      state: 'applied';
+      at: number;
+      limits: ComputeWorkerLimits;
+    };
+
+export interface ComputeExecutionTimelineItem {
+  sequence: number;
+  detail: ComputeWorkerTelemetryEvent;
+  at: string;
+  receivedAt: string;
+}
+
+export interface ComputeExecutionDetailResponse extends ComputeWorkerExecutionView {
+  timeline: ComputeExecutionTimelineItem[];
+}
+
+export interface ComputeHistoryPoint {
+  at: string;
+  bootId?: string;
+  usage: ComputeWorkerLimits;
+  waiting: ComputeWorkerLimits;
+  applied: ComputeWorkerLimits;
+  hard: ComputeWorkerLimits;
+  workers: number;
+  clockUncertain: boolean;
+  gap: boolean;
+}
+
+export interface ComputeHistoryResponse {
+  since: string;
+  until: string;
+  points: ComputeHistoryPoint[];
+}
+
+export interface ComputeLimitChangeRecord {
+  commandId: string;
+  instanceId: string;
+  revision: number;
+  requestedBy: string;
+  requestedAt: string;
+  previousLimits: ComputeWorkerLimits;
+  requestedLimits: ComputeWorkerLimits;
+  status: ComputeWorkerLimitChangeStatus;
+  reason: ComputeWorkerLimitRejectionReason | null;
+  appliedLimits: ComputeWorkerLimits | null;
+  confirmedAt: string | null;
+  resultObservedAt: string | null;
+}
+
+export interface ComputeLimitsListResponse {
+  changes: ComputeLimitChangeRecord[];
+}
+
+export interface UpdateComputeWorkerLimitsInput {
+  expectedRevision: number;
+  total: number;
+  encode: number;
+  probe: number;
+}
+
+export interface UpdateComputeWorkerLimitsResponse {
+  commandId: string;
+  revision: number;
+  requestedAt: string;
+  limits: ComputeWorkerLimits;
+  status: 'pending';
+}

@@ -1,6 +1,8 @@
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
+  Cpu,
   Database,
   HardDrive,
   Radio,
@@ -40,7 +42,92 @@ function formatDurationSeconds(sec: number | null): string {
   return `${mins}m ${Math.floor(sec % 60)}s`;
 }
 
-export function MonitoringPage() {
+interface ComputeTasksMonitoringCardProps {
+  compute: MonitoringData['compute'];
+  onOpenComputeWorkers?: () => void;
+}
+
+function ComputeTasksMonitoringCard({
+  compute,
+  onOpenComputeWorkers,
+}: ComputeTasksMonitoringCardProps) {
+  return (
+    <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-2xs space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Cpu className="h-4 w-4 text-indigo-600" />
+          <h3 className="text-sm font-semibold text-slate-900">
+            计算任务监控（{compute.enabled ? '计算表已启用' : '未迁移计算表'}）
+          </h3>
+        </div>
+        {onOpenComputeWorkers && (
+          <button
+            type="button"
+            onClick={onOpenComputeWorkers}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-xs font-medium text-indigo-700 transition cursor-pointer"
+          >
+            <Cpu className="h-3.5 w-3.5" />
+            查看 Worker 调度与调限
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5 text-xs">
+        <div className="rounded-lg bg-slate-50 border border-slate-100 p-2.5">
+          <div className="text-slate-500">计算任务总计</div>
+          <div className="font-mono text-lg font-semibold text-slate-900 mt-0.5">
+            {compute.jobs.total}
+          </div>
+        </div>
+        <div className="rounded-lg bg-slate-50 border border-slate-100 p-2.5">
+          <div className="text-slate-500">已受理 (`accepted`)</div>
+          <div className="font-mono text-lg font-semibold text-slate-800 mt-0.5">
+            {compute.jobs.accepted}
+          </div>
+        </div>
+        <div className="rounded-lg bg-slate-50 border border-slate-100 p-2.5">
+          <div className="text-slate-500">排队中 (`queued`)</div>
+          <div className="font-mono text-lg font-semibold text-amber-700 mt-0.5">
+            {compute.jobs.queued}
+          </div>
+        </div>
+        <div className="rounded-lg bg-slate-50 border border-slate-100 p-2.5">
+          <div className="text-slate-500">执行中 (`running`)</div>
+          <div className="font-mono text-lg font-semibold text-indigo-700 mt-0.5">
+            {compute.jobs.running}
+          </div>
+        </div>
+        <div className="rounded-lg bg-slate-50 border border-slate-100 p-2.5">
+          <div className="text-slate-500">已成功 (`succeeded`)</div>
+          <div className="font-mono text-lg font-semibold text-emerald-700 mt-0.5">
+            {compute.jobs.succeeded}
+          </div>
+        </div>
+        <div className="rounded-lg bg-slate-50 border border-slate-100 p-2.5">
+          <div className="text-slate-500">已失败 (`failed`)</div>
+          <div className="font-mono text-lg font-semibold text-rose-700 mt-0.5">
+            {compute.jobs.failed}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 font-mono">
+        <span>
+          Outbox 待发={compute.outbox.pending} · 租约中={compute.outbox.leased} · 已处理 Inbox=
+          {compute.inboxProcessed}
+        </span>
+        <span>最老未发年龄：{formatDurationSeconds(compute.outbox.oldestUnsentAgeSeconds)}</span>
+      </div>
+    </div>
+  );
+}
+
+interface MonitoringPageProps {
+  onOpenComputeWorkers?: () => void;
+}
+
+export function MonitoringPage({ onOpenComputeWorkers }: MonitoringPageProps) {
   const [windowRange, setWindowRange] = useState<MonitoringWindow>('7d');
   const [data, setData] = useState<MonitoringData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -433,6 +520,12 @@ export function MonitoringPage() {
               )}
             </div>
           </div>
+
+          {/* Compute Tasks Monitoring Card */}
+          <ComputeTasksMonitoringCard
+            compute={data.compute}
+            onOpenComputeWorkers={onOpenComputeWorkers}
+          />
 
           {/* Provider Credential Overview */}
           <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-2xs">

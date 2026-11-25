@@ -258,4 +258,167 @@ describe('adminApi', () => {
       message: '全局配置已被其他操作更新，请刷新最新配置后再保存',
     });
   });
+
+  it('calls compute worker observability and dynamic limit endpoints with accurate paths and payloads', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          now: '2026-04-01T00:00:00.000Z',
+          instances: { online: 1, stale: 0, offline: 0, unseen: 0 },
+          aggregate: {
+            usage: { total: 1, encode: 1, probe: 0 },
+            applied: { total: 2, encode: 1, probe: 1 },
+            hard: { total: 4, encode: 2, probe: 2 },
+            waiting: { total: 0, encode: 0, probe: 0 },
+            heldResources: 0,
+          },
+          outbox: { transcode: 0, media: 0, total: 0 },
+          broker: { ready: null, unacknowledged: null },
+          peaks: [],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ workers: [], total: 0, offset: 0 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          instanceId: 'worker-a.1',
+          status: 'unseen',
+          bootId: null,
+          observedAt: null,
+          receivedAt: null,
+          ageMs: null,
+          clockUncertain: false,
+          gap: null,
+          draining: false,
+          snapshot: null,
+          desired: null,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ executions: [] }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          executionId: '550e8400-e29b-41d4-a716-446655440001',
+          instanceId: 'worker-a.1',
+          bootId: '550e8400-e29b-41d4-a716-446655440009',
+          protocol: 'media',
+          jobId: '550e8400-e29b-41d4-a716-446655440000',
+          attemptId: '550e8400-e29b-41d4-a716-446655440002',
+          inspectionId: null,
+          resource: 'encode',
+          slots: 1,
+          state: 'active',
+          uncertain: false,
+          queuedAt: null,
+          acquiredAt: '2026-04-01T00:00:00.000Z',
+          endedAt: null,
+          lastAt: '2026-04-01T00:00:02.000Z',
+          businessState: 'running',
+          businessStage: 'encode',
+          timeline: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          since: '2026-04-01T00:00:00.000Z',
+          until: '2026-04-01T01:00:00.000Z',
+          points: [],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ changes: [] }))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            commandId: '550e8400-e29b-41d4-a716-446655440099',
+            revision: 3,
+            requestedAt: '2026-04-01T00:00:05.000Z',
+            limits: { total: 0, encode: 0, probe: 0 },
+            status: 'pending',
+          },
+          202,
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await adminApi.getComputeSummary();
+    await adminApi.listComputeWorkers({ limit: 32, offset: 0 });
+    await adminApi.getComputeWorker('worker-a.1');
+    await adminApi.listComputeExecutions({
+      instanceId: 'worker-a.1',
+      jobId: '550e8400-e29b-41d4-a716-446655440000',
+      state: 'active',
+      limit: 25,
+    });
+    await adminApi.getComputeExecution('550e8400-e29b-41d4-a716-446655440001');
+    await adminApi.getComputeHistory({
+      instanceId: 'worker-a.1',
+      since: '2026-04-01T00:00:00.000Z',
+      until: '2026-04-01T01:00:00.000Z',
+      limit: 120,
+    });
+    await adminApi.listComputeLimits({ instanceId: 'worker-a.1', limit: 20 });
+    const putRes = await adminApi.updateComputeWorkerLimits('worker-a.1', {
+      expectedRevision: 2,
+      total: 0,
+      encode: 0,
+      probe: 0,
+    });
+
+    expect(putRes.status).toBe('pending');
+    expect(putRes.revision).toBe(3);
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/admin/compute/summary');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/v1/admin/compute/workers?limit=32&offset=0');
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/v1/admin/compute/workers/worker-a.1');
+    expect(fetchMock.mock.calls[3]?.[0]).toBe(
+      '/api/v1/admin/compute/executions?instanceId=worker-a.1&jobId=550e8400-e29b-41d4-a716-446655440000&state=active&limit=25',
+    );
+    expect(fetchMock.mock.calls[4]?.[0]).toBe(
+      '/api/v1/admin/compute/executions/550e8400-e29b-41d4-a716-446655440001',
+    );
+    expect(fetchMock.mock.calls[5]?.[0]).toBe(
+      '/api/v1/admin/compute/history?instanceId=worker-a.1&since=2026-04-01T00%3A00%3A00.000Z&until=2026-04-01T01%3A00%3A00.000Z&limit=120',
+    );
+    expect(fetchMock.mock.calls[6]?.[0]).toBe(
+      '/api/v1/admin/compute/limits?instanceId=worker-a.1&limit=20',
+    );
+    const [putUrl, putInit] = fetchMock.mock.calls[7]!;
+    expect(putUrl).toBe('/api/v1/admin/compute/workers/worker-a.1/limits');
+    expect(putInit?.method).toBe('PUT');
+    expect(putInit?.credentials).toBe('include');
+    expect(new Headers(putInit?.headers).get('Content-Type')).toBe('application/json');
+    expect(putInit?.body).toBe(
+      JSON.stringify({ expectedRevision: 2, total: 0, encode: 0, probe: 0 }),
+    );
+  });
+
+  it('maps compute worker error codes including 503 COMPUTE_OPS_UNAVAILABLE and 409 WORKER_REVISION_CONFLICT', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { code: 'COMPUTE_OPS_UNAVAILABLE', message: 'Unavailable' } }, 503),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { code: 'WORKER_REVISION_CONFLICT', message: 'Conflict' } }, 409),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(adminApi.getComputeSummary()).rejects.toMatchObject({
+      status: 503,
+      code: 'COMPUTE_OPS_UNAVAILABLE',
+      message: '后端未启用计算 Worker 观测或计算观测服务暂不可用',
+    });
+
+    await expect(
+      adminApi.updateComputeWorkerLimits('worker-a', {
+        expectedRevision: 1,
+        total: 2,
+        encode: 1,
+        probe: 1,
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'WORKER_REVISION_CONFLICT',
+      message: '其他操作员已更新该实例的配置修订，请刷新最新配置后重填',
+    });
+  });
 });

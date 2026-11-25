@@ -4,6 +4,14 @@ import type {
   AdminCatalogSummary,
   AdminModelItem,
   Category,
+  ComputeExecutionDetailResponse,
+  ComputeExecutionsListResponse,
+  ComputeHistoryResponse,
+  ComputeLimitsListResponse,
+  ComputeSummaryResponse,
+  ComputeWorkerExecutionState,
+  ComputeWorkerView,
+  ComputeWorkersListResponse,
   DiscoveryCandidateItem,
   DiscoveryResult,
   GlobalSettingsResponse,
@@ -14,6 +22,8 @@ import type {
   RouteTemplateItem,
   RouteTemplateUiHints,
   TemplatesListResponse,
+  UpdateComputeWorkerLimitsInput,
+  UpdateComputeWorkerLimitsResponse,
   UpdateGlobalSettingsInput,
 } from './types';
 
@@ -28,7 +38,7 @@ export class ApiClientError extends Error {
   }
 }
 
-const CODE_LABELS: Record<string, string> = {
+export const CODE_LABELS: Record<string, string> = {
   ADMIN_UNAUTHORIZED: '管理员登录已过期，请重新登录',
   ADMIN_INVALID_CREDENTIALS: '用户名或密码错误',
   ADMIN_PASSWORD_MISMATCH: '当前原始密码不正确',
@@ -47,6 +57,17 @@ const CODE_LABELS: Record<string, string> = {
   REVISION_NOT_RESTORABLE: '删除类型的历史记录无路由快照，请选择上一条有效版本进行恢复',
   SETTINGS_CONFLICT: '全局配置已被其他操作更新，请刷新最新配置后再保存',
   ORIGIN_DENIED: '当前前端访问域名不在后端允许 Origin 列表内（检查 MIO_ADMIN_ALLOWED_ORIGINS）',
+  COMPUTE_OPS_UNAVAILABLE: '后端未启用计算 Worker 观测或计算观测服务暂不可用',
+  WORKER_NOT_FOUND: '未找到指定的计算 Worker 实例',
+  WORKER_NOT_OBSERVED: '该 Worker 实例尚无遥测快照，收到心跳后可调整并发上限',
+  WORKER_REVISION_CONFLICT: '其他操作员已更新该实例的配置修订，请刷新最新配置后重填',
+  WORKER_HARD_LIMIT_EXCEEDED: '提交上限超过该实例的部署硬上限，请检查总槽、编码与探测上限',
+  HARD_LIMIT_EXCEEDED: 'Worker 拒绝了配置：提交上限超出当前部署硬上限',
+  STALE_REVISION: 'Worker 已处理更新的修订，当前调限命令已过时',
+  INSTANCE_MISMATCH: 'Worker 实例身份与目标实例不一致',
+  LIMITS_INVALID: 'Worker 拒绝了无效并发上限配置',
+  QUERY_INVALID: '查询参数格式无效，请检查实例 ID、状态或任务 UUID',
+  BODY_INVALID: '提交的调限参数格式不合法，请输入非负整数',
 };
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -290,4 +311,99 @@ export const adminApi = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
+
+  getComputeSummary: (options?: { signal?: AbortSignal }) =>
+    request<ComputeSummaryResponse>('/compute/summary', {
+      cache: 'no-store',
+      ...(options?.signal ? { signal: options.signal } : {}),
+    }),
+
+  listComputeWorkers: (
+    params: { limit?: number; offset?: number } = {},
+    options?: { signal?: AbortSignal },
+  ) => {
+    const search = new URLSearchParams();
+    if (params.limit !== undefined) search.set('limit', String(params.limit));
+    if (params.offset !== undefined) search.set('offset', String(params.offset));
+    const qs = search.toString();
+    return request<ComputeWorkersListResponse>(`/compute/workers${qs ? `?${qs}` : ''}`, {
+      cache: 'no-store',
+      ...(options?.signal ? { signal: options.signal } : {}),
+    });
+  },
+
+  getComputeWorker: (instanceId: string, options?: { signal?: AbortSignal }) =>
+    request<ComputeWorkerView>(`/compute/workers/${encodeURIComponent(instanceId)}`, {
+      cache: 'no-store',
+      ...(options?.signal ? { signal: options.signal } : {}),
+    }),
+
+  listComputeExecutions: (
+    params: {
+      instanceId?: string;
+      jobId?: string;
+      state?: ComputeWorkerExecutionState;
+      limit?: number;
+    } = {},
+    options?: { signal?: AbortSignal },
+  ) => {
+    const search = new URLSearchParams();
+    if (params.instanceId) search.set('instanceId', params.instanceId);
+    if (params.jobId) search.set('jobId', params.jobId);
+    if (params.state) search.set('state', params.state);
+    if (params.limit !== undefined) search.set('limit', String(params.limit));
+    const qs = search.toString();
+    return request<ComputeExecutionsListResponse>(`/compute/executions${qs ? `?${qs}` : ''}`, {
+      cache: 'no-store',
+      ...(options?.signal ? { signal: options.signal } : {}),
+    });
+  },
+
+  getComputeExecution: (executionId: string, options?: { signal?: AbortSignal }) =>
+    request<ComputeExecutionDetailResponse>(
+      `/compute/executions/${encodeURIComponent(executionId)}`,
+      {
+        cache: 'no-store',
+        ...(options?.signal ? { signal: options.signal } : {}),
+      },
+    ),
+
+  getComputeHistory: (
+    params: { instanceId?: string; since?: string; until?: string; limit?: number } = {},
+    options?: { signal?: AbortSignal },
+  ) => {
+    const search = new URLSearchParams();
+    if (params.instanceId) search.set('instanceId', params.instanceId);
+    if (params.since) search.set('since', params.since);
+    if (params.until) search.set('until', params.until);
+    if (params.limit !== undefined) search.set('limit', String(params.limit));
+    const qs = search.toString();
+    return request<ComputeHistoryResponse>(`/compute/history${qs ? `?${qs}` : ''}`, {
+      cache: 'no-store',
+      ...(options?.signal ? { signal: options.signal } : {}),
+    });
+  },
+
+  listComputeLimits: (
+    params: { instanceId?: string; limit?: number } = {},
+    options?: { signal?: AbortSignal },
+  ) => {
+    const search = new URLSearchParams();
+    if (params.instanceId) search.set('instanceId', params.instanceId);
+    if (params.limit !== undefined) search.set('limit', String(params.limit));
+    const qs = search.toString();
+    return request<ComputeLimitsListResponse>(`/compute/limits${qs ? `?${qs}` : ''}`, {
+      cache: 'no-store',
+      ...(options?.signal ? { signal: options.signal } : {}),
+    });
+  },
+
+  updateComputeWorkerLimits: (instanceId: string, payload: UpdateComputeWorkerLimitsInput) =>
+    request<UpdateComputeWorkerLimitsResponse>(
+      `/compute/workers/${encodeURIComponent(instanceId)}/limits`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      },
+    ),
 };
