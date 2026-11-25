@@ -53,7 +53,7 @@ const OTP_FLOWS = {
     label: '补绑空闲手机号',
     sendLabel: '发送验证码',
     submitLabel: '确认补绑',
-    sentMsg: '补绑验证码已通过真实短信下发，请输入 6 位验证码完成补绑。',
+    sentMsg: '补绑验证码已发送（固定验证码模式下填入后台 6 位固定码即可）。',
     send: (p: string) => userAuthApi.sendPhoneBindingOtp(p),
     submit: async (p: string, c: string) => {
       await userAuthApi.confirmPhoneBinding(p, c);
@@ -65,7 +65,7 @@ const OTP_FLOWS = {
     label: '已有 Mio 账号手机号',
     sendLabel: '发送绑定验证码',
     submitLabel: '确认绑定并登录',
-    sentMsg: '绑定验证码已通过真实短信下发（严格不走固定验证码 bypass 模式）。',
+    sentMsg: '绑定验证码已发送（固定验证码模式下填入后台 6 位固定码即可）。',
     send: (p: string) => userAuthApi.sendOneLinkExistingOtp(p),
     submit: async (p: string, c: string, token?: string) => {
       const r = await userAuthApi.completeOneLink({
@@ -476,10 +476,8 @@ function OneLinkPendingPanel(p: {
               <div className={`${SUBCARD} space-y-2.5`}>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
                   <strong className="block text-xs text-slate-900 mb-1">绑定已有 Mio 账号</strong>
-                  校验老号手机号短信验证码完成绑定。
-                  <span className="font-medium text-amber-800">
-                    严格使用真实短信，不走固定验证码 bypass。
-                  </span>
+                  校验老号手机号短信验证码完成绑定（开启后台固定 6
+                  位验证码模式时可跳过真实短信，直接填固定码）。
                 </p>
                 <PhoneOtpForm
                   key={pending.candidateToken}
