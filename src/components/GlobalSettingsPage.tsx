@@ -19,6 +19,7 @@ import type {
   GlobalSettingsResponse,
   GlobalSettingsRuntimeInfo,
 } from '../types';
+import { OneLinkSsoSettingsCard } from './OneLinkSsoSettingsCard';
 
 const SIX_DIGIT_CODE_RE = /^\d{6}$/;
 
@@ -36,15 +37,15 @@ const SMS_MODE_OPTIONS: {
   },
   {
     mode: 'bypass',
-    title: '关闭真实短信验证（固定 6 位验证码登录）',
+    title: '关闭真实短信验证（固定 6 位验证码）',
     description:
-      '点击发码不扣真实短信，用户输入下方后台设置的固定 6 位验证码即可跳过发短信直接登录。',
+      '点击发码不扣真实短信，用户输入下方后台设置的固定 6 位验证码即可跳过真实短信完成登录、补绑手机号与万联绑定已有账号。',
     badge: { text: '高风险', className: 'bg-amber-100 text-amber-800' },
   },
   {
     mode: 'disabled',
     title: '完全关闭手机验证码入口',
-    description: '手机登录与手机号绑定均返回 503 SMS_UNAVAILABLE。',
+    description: '手机登录、手机号补绑与万联绑定已有账号的短信入口均返回 503 SMS_UNAVAILABLE。',
     badge: { text: '停用入口', className: 'bg-slate-200 text-slate-700' },
   },
 ];
@@ -282,14 +283,15 @@ function SmsPolicyCard({
           <div className="rounded-xl border border-rose-200 bg-gradient-to-r from-amber-50 to-rose-50 px-4 py-3.5 flex items-start gap-3">
             <AlertTriangle className="h-4 w-4 text-rose-600 mt-0.5 shrink-0" />
             <div className="space-y-1 text-xs text-rose-900">
-              <div className="font-semibold">高风险安全提示：固定 6 位验证码登录</div>
+              <div className="font-semibold">
+                高风险安全提示：固定 6 位验证码（全站短信入口生效）
+              </div>
               <p className="leading-relaxed text-rose-800">
-                开启后，任何知晓用户手机号与该固定 6 位验证码的人均可跳过短信验证直接登录对应账号，
-                存在严重的账号接管风险；严禁在公开生产环境长期保留此模式。
-              </p>
-              <p className="leading-relaxed text-amber-900">
-                注意：手机号绑定流程（<code className="font-mono">/api/auth/phone-binding/*</code>
-                ）不遵循此固定码策略，仍需真实短信校验或受停用策略约束。
+                开启后，任何知晓用户手机号与该固定 6
+                位验证码的人均可跳过真实短信直接登录或绑定对应手机号（涵盖普通手机号登录、
+                <code className="font-mono">/api/auth/phone-binding/*</code> 补绑与万联{' '}
+                <code className="font-mono">/api/auth/onelink/existing/*</code>{' '}
+                绑定已有账号），存在严重的账号接管风险；严禁在公开生产环境长期保留此模式。
               </p>
             </div>
           </div>
@@ -590,19 +592,13 @@ export function GlobalSettingsPage() {
     }
   };
 
-  if (loading && !loaded) {
-    return (
-      <div className="max-w-3xl">
+  return (
+    <div className="max-w-3xl space-y-6">
+      {loading && !loaded ? (
         <div className="rounded-xl bg-white border border-slate-200 p-8 text-center text-xs text-slate-500">
           正在加载全局配置…
         </div>
-      </div>
-    );
-  }
-
-  if (!loaded) {
-    return (
-      <div className="max-w-3xl">
+      ) : !loaded ? (
         <div className="rounded-xl bg-rose-50 border border-rose-200 p-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs text-rose-700">
             <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -616,64 +612,64 @@ export function GlobalSettingsPage() {
             <RefreshCw className="h-3.5 w-3.5" /> 重新加载
           </button>
         </div>
-      </div>
-    );
-  }
+      ) : (
+        <form onSubmit={handleSave} className="space-y-6">
+          <StatusSummaryCard
+            settings={loaded.settings}
+            loading={loading}
+            saving={saving}
+            onRefresh={() => void loadSettings(true)}
+          />
 
-  return (
-    <form onSubmit={handleSave} className="max-w-3xl space-y-6">
-      <StatusSummaryCard
-        settings={loaded.settings}
-        loading={loading}
-        saving={saving}
-        onRefresh={() => void loadSettings(true)}
-      />
+          {loadError && (
+            <div className="rounded-lg px-3.5 py-2.5 text-xs bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>刷新配置失败：{loadError}</span>
+            </div>
+          )}
 
-      {loadError && (
-        <div className="rounded-lg px-3.5 py-2.5 text-xs bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>刷新配置失败：{loadError}</span>
-        </div>
+          <EmailPasswordCard
+            enabled={emailPasswordEnabled}
+            envDefault={loaded.runtime.envEmailPasswordDefault}
+            disabled={saving || loading}
+            onToggle={(next) => {
+              setEmailPasswordEnabled(next);
+              setNotice(null);
+            }}
+          />
+
+          <SmsPolicyCard
+            smsMode={smsMode}
+            smsBypassCode={smsBypassCode}
+            savedBypassCode={loaded.settings.auth.smsBypassCode}
+            runtime={loaded.runtime}
+            codeError={codeError}
+            disabled={saving || loading}
+            onModeChange={(nextMode) => {
+              setSmsMode(nextMode);
+              setNotice(null);
+            }}
+            onBypassCodeChange={(nextCode) => {
+              setSmsBypassCode(nextCode);
+              setNotice(null);
+            }}
+          />
+
+          <SettingsActionBar
+            isDirty={isDirty}
+            canSave={canSave}
+            loading={loading}
+            saving={saving}
+            conflictError={conflictError}
+            saveError={saveError}
+            notice={notice}
+            onReload={() => void loadSettings(true)}
+            onResetDraft={handleResetDraft}
+          />
+        </form>
       )}
 
-      <EmailPasswordCard
-        enabled={emailPasswordEnabled}
-        envDefault={loaded.runtime.envEmailPasswordDefault}
-        disabled={saving || loading}
-        onToggle={(next) => {
-          setEmailPasswordEnabled(next);
-          setNotice(null);
-        }}
-      />
-
-      <SmsPolicyCard
-        smsMode={smsMode}
-        smsBypassCode={smsBypassCode}
-        savedBypassCode={loaded.settings.auth.smsBypassCode}
-        runtime={loaded.runtime}
-        codeError={codeError}
-        disabled={saving || loading}
-        onModeChange={(nextMode) => {
-          setSmsMode(nextMode);
-          setNotice(null);
-        }}
-        onBypassCodeChange={(nextCode) => {
-          setSmsBypassCode(nextCode);
-          setNotice(null);
-        }}
-      />
-
-      <SettingsActionBar
-        isDirty={isDirty}
-        canSave={canSave}
-        loading={loading}
-        saving={saving}
-        conflictError={conflictError}
-        saveError={saveError}
-        notice={notice}
-        onReload={() => void loadSettings(true)}
-        onResetDraft={handleResetDraft}
-      />
-    </form>
+      <OneLinkSsoSettingsCard />
+    </div>
   );
 }

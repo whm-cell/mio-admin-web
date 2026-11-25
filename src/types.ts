@@ -623,3 +623,94 @@ export interface UpdateComputeWorkerLimitsResponse {
   limits: ComputeWorkerLimits;
   status: 'pending';
 }
+
+export type OneLinkSsoRegistrationStatus = 'unregistered' | 'registered' | 'trusted_existing';
+
+export type OneLinkSsoRegistrationSource = 'register_200' | 'register_362_trusted';
+
+export interface AdminOneLinkSsoConfig {
+  environment: string;
+  enabled: boolean;
+  clientName: string;
+  clientId: string | null;
+  expectedClientId: string | null;
+  registrationStatus: OneLinkSsoRegistrationStatus;
+  registrationSource: OneLinkSsoRegistrationSource | null;
+  lastRegisterCode: number | null;
+  lastRegisterTraceId: string | null;
+  lastRegisterMessage: string | null;
+  lastRegisteredAt: string | null;
+  revision: number;
+  updatedBy: string | null;
+  updatedAt: string | null;
+}
+
+export interface AdminOneLinkSsoRuntime {
+  configured: boolean;
+  hasEncryptionKey: boolean;
+  authorizeOrigin: string | null;
+  registerOrigin: string | null;
+  callbackUrl: string | null;
+  tokenVerificationMode: 'payload_sub_unverified';
+}
+
+export interface AdminOneLinkSsoView {
+  config: AdminOneLinkSsoConfig;
+  runtime: AdminOneLinkSsoRuntime;
+}
+
+export interface UpdateAdminOneLinkSsoInput {
+  expectedRevision: number;
+  enabled: boolean;
+  expectedClientId: string | null;
+}
+
+export type OneLinkSsoRegisterOutcome =
+  'registered' | 'already_exists_trusted' | 'rejected' | 'failed';
+
+export interface RegisterOneLinkSsoResponse extends AdminOneLinkSsoView {
+  outcome: OneLinkSsoRegisterOutcome;
+  upstreamCode: number | null;
+  errorCode: string | null;
+  traceId: string | null;
+}
+
+export interface UserAuthMe {
+  userId: string;
+  sessionId: string;
+}
+
+export interface UserAuthProfile {
+  userId: string;
+  displayId: string | null;
+  name: string;
+  avatarAssetId: string | null;
+  phoneNumber: string | null;
+  phoneNumberVerified: boolean;
+  wechatBound: boolean;
+  onelinkBound: boolean;
+}
+
+export type OneLinkAuthIntent = 'login' | 'bind';
+
+export interface OneLinkPendingCandidate {
+  status: 'candidate_ready';
+  intent: OneLinkAuthIntent;
+  candidateToken: string;
+  onelinkSub: string;
+  onelinkSubMasked: string;
+  clientId: string | null;
+  expiresAt: string;
+}
+
+export type CompleteOneLinkPayload =
+  | { action: 'create'; candidateToken: string }
+  | { action: 'link_existing'; candidateToken: string; phoneNumber: string; code: string }
+  | { action: 'bind_current'; candidateToken: string };
+
+export interface CompleteOneLinkResponse {
+  status: boolean;
+  action: 'create' | 'link_existing' | 'bind_current';
+  userId: string;
+  alreadyBound?: boolean;
+}
